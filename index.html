@@ -52,8 +52,7 @@ canvas{
 </div>
 
 <div id="hud">
-  Pontos: <span id="score">0</span>
-  <br>
+  Pontos: <span id="score">0</span><br>
   <button onclick="toggleSound()">🔊 Som</button>
   <button onclick="menu()">⬅ Menu</button>
 </div>
@@ -79,6 +78,9 @@ const finalEl = document.getElementById("final");
 
 let game=0, score=0, active=false, sound=true;
 let player={}, items=[], ball={}, lastGame=0, speed=1;
+
+/* ==== TIMER DO DESVIE ==== */
+let lastTimePoint = 0;
 
 /* ==== AUDIO ==== */
 let audioCtx=null;
@@ -112,6 +114,7 @@ function start(n){
   initAudio();
   lastGame=n;
   game=n; score=0; speed=1;
+  lastTimePoint = performance.now();
   scoreEl.textContent=0;
   menuDiv.style.display="none";
   hud.style.display="block";
@@ -139,7 +142,7 @@ function endGame(){
   beep(180);
 }
 
-/* ==== COLISÃO REAL (CÍRCULO x RETÂNGULO) ==== */
+/* ==== COLISÃO REAL ==== */
 function circleRectCollision(cx,cy,cr,rx,ry,rw,rh){
   const testX = Math.max(rx, Math.min(cx, rx+rw));
   const testY = Math.max(ry, Math.min(cy, ry+rh));
@@ -148,23 +151,24 @@ function circleRectCollision(cx,cy,cr,rx,ry,rw,rh){
   return (distX*distX + distY*distY) <= cr*cr;
 }
 
-/* ==== JOGO 1: DESVIE DAS BOLAS (FIXADO) ==== */
+/* ==== JOGO 1: DESVIE DAS BOLAS (COM TEMPO) ==== */
 function gameAvoid(){
+  // pontos por tempo (1 por segundo)
+  const now = performance.now();
+  if(now - lastTimePoint >= 1000){
+    score++;
+    lastTimePoint += 1000;
+  }
+
   speed+=0.001;
 
   if(Math.random()<0.03){
-    items.push({
-      x:Math.random()*320+20,
-      y:-20,
-      r:12
-    });
+    items.push({ x:Math.random()*320+20, y:-20, r:12 });
   }
 
-  // player
   ctx.fillStyle="#22c55e";
   ctx.fillRect(player.x,player.y,player.w,player.h);
 
-  // bolas
   ctx.fillStyle="#ef4444";
   items.forEach(b=>{
     b.y += 4*speed;
@@ -172,12 +176,10 @@ function gameAvoid(){
     ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
     ctx.fill();
 
-    if(
-      circleRectCollision(
-        b.x,b.y,b.r,
-        player.x,player.y,player.w,player.h
-      )
-    ){
+    if(circleRectCollision(
+      b.x,b.y,b.r,
+      player.x,player.y,player.w,player.h
+    )){
       endGame();
     }
   });
@@ -187,7 +189,6 @@ function gameAvoid(){
 function gamePong(){
   ctx.fillStyle="#22c55e";
   ctx.fillRect(20,player.y,10,player.h);
-
   ctx.fillRect(350,0,5,500);
 
   ctx.beginPath();
@@ -201,21 +202,14 @@ function gamePong(){
     ball.vy*=-1;
     beep(300);
   }
-
   if(ball.x>350-ball.r){
     ball.vx*=-1;
   }
-
-  if(
-    ball.x-ball.r<30 &&
-    ball.y>player.y &&
-    ball.y<player.y+player.h
-  ){
+  if(ball.x-ball.r<30 && ball.y>player.y && ball.y<player.y+player.h){
     ball.vx*=-1;
     score++;
     beep(600);
   }
-
   if(ball.x<0) endGame();
 }
 
