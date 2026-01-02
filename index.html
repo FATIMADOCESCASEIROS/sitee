@@ -1,155 +1,64 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
-  <title>GameZone</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <style>
+<meta charset="UTF-8">
+<title>Site de Jogos</title>
+<style>
     body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #0f172a;
-      color: #ffffff;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background: #111;
+        color: #fff;
     }
-
-    header {
-      background: #020617;
-      padding: 20px;
-      text-align: center;
-      border-bottom: 2px solid #22c55e;
+    button {
+        padding: 20px 40px;
+        font-size: 20px;
+        cursor: pointer;
+        margin-top: 20px;
+        border-radius: 10px;
+        border: none;
+        background: #00ff88;
     }
-
-    header h1 {
-      margin: 0;
-      color: #22c55e;
-    }
-
-    nav {
-      margin-top: 10px;
-    }
-
-    nav a {
-      color: #ffffff;
-      margin: 0 10px;
-      text-decoration: none;
-      font-weight: bold;
-    }
-
-    nav a:hover {
-      color: #22c55e;
-    }
-
-    .container {
-      padding: 30px;
-      max-width: 1100px;
-      margin: auto;
-    }
-
-    .games {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-    }
-
-    .game {
-      background: #020617;
-      border-radius: 10px;
-      padding: 15px;
-      text-align: center;
-      border: 1px solid #1e293b;
-      transition: transform 0.2s;
-    }
-
-    .game:hover {
-      transform: scale(1.03);
-      border-color: #22c55e;
-    }
-
-    .game img {
-      width: 100%;
-      border-radius: 8px;
-    }
-
-    .game h3 {
-      margin: 10px 0 5px;
-      color: #22c55e;
-    }
-
-    .game p {
-      font-size: 14px;
-      color: #cbd5f5;
-    }
-
-    .game a {
-      display: inline-block;
-      margin-top: 10px;
-      padding: 10px 15px;
-      background: #22c55e;
-      color: #020617;
-      text-decoration: none;
-      border-radius: 5px;
-      font-weight: bold;
-    }
-
-    .game a:hover {
-      background: #16a34a;
-    }
-
-    footer {
-      background: #020617;
-      text-align: center;
-      padding: 15px;
-      margin-top: 40px;
-      font-size: 14px;
-      color: #94a3b8;
-    }
-  </style>
+</style>
 </head>
+
 <body>
 
-  <header>
-    <h1>🎮 GameZone</h1>
-    <p>Seu site de jogos online</p>
-    <nav>
-      <a href="#">Início</a>
-      <a href="#">Jogos</a>
-      <a href="#">Contato</a>
-    </nav>
-  </header>
+<h1>🎮 Jogo do Clique</h1>
+<p>Tempo: <span id="tempo">10</span>s</p>
+<p>Pontos: <span id="pontos">0</span></p>
 
-  <div class="container">
-    <h2>🔥 Jogos em Destaque</h2>
+<button id="btn" onclick="clicar()">CLIQUE AQUI</button>
 
-    <div class="games">
+<script>
+let pontos = 0;
+let tempo = 10;
+let ativo = false;
 
-      <div class="game">
-        <img src="https://via.placeholder.com/300x180?text=Jogo+1" alt="Jogo 1">
-        <h3>Jogo Ação</h3>
-        <p>Um jogo cheio de ação e aventura.</p>
-        <a href="#">Jogar</a>
-      </div>
+function clicar() {
+    if (!ativo) {
+        ativo = true;
+        iniciarTempo();
+    }
+    if (tempo > 0) {
+        pontos++;
+        document.getElementById("pontos").innerText = pontos;
+    }
+}
 
-      <div class="game">
-        <img src="https://via.placeholder.com/300x180?text=Jogo+2" alt="Jogo 2">
-        <h3>Jogo Corrida</h3>
-        <p>Velocidade máxima e adrenalina.</p>
-        <a href="#">Jogar</a>
-      </div>
+function iniciarTempo() {
+    let intervalo = setInterval(() => {
+        tempo--;
+        document.getElementById("tempo").innerText = tempo;
 
-      <div class="game">
-        <img src="https://via.placeholder.com/300x180?text=Jogo+3" alt="Jogo 3">
-        <h3>Jogo Puzzle</h3>
-        <p>Desafie sua mente com quebra-cabeças.</p>
-        <a href="#">Jogar</a>
-      </div>
-
-    </div>
-  </div>
-
-  <footer>
-    © 2026 - GameZone | Site de jogos
-  </footer>
+        if (tempo <= 0) {
+            clearInterval(intervalo);
+            document.getElementById("btn").disabled = true;
+            alert("Fim de jogo! Pontuação: " + pontos);
+        }
+    }, 1000);
+}
+</script>
 
 </body>
 </html>
