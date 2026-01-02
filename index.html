@@ -4,51 +4,30 @@
 <meta charset="UTF-8">
 <title>Arcade Games</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #0f172a;
-  color: #fff;
-  text-align: center;
-}
-h1 { color: #22c55e; }
-button {
-  padding: 12px 20px;
-  margin: 6px;
-  font-size: 16px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  background: #22c55e;
-}
-canvas {
-  background: #020617;
-  display: block;
-  margin: 10px auto;
-  border: 2px solid #22c55e;
-}
-#menu, .game { display: none; }
+body{margin:0;font-family:Arial;background:#0f172a;color:#fff;text-align:center}
+h1{color:#22c55e}
+button{padding:12px 20px;margin:6px;border:none;border-radius:8px;background:#22c55e;cursor:pointer}
+canvas{background:#020617;margin:10px auto;display:block;border:2px solid #22c55e}
+#menu,#hud{display:none}
 </style>
 </head>
-
 <body>
 
 <h1>🎮 Arcade Games</h1>
 
 <div id="menu">
   <p>Escolha um jogo</p>
-  <button onclick="startGame(1)">Desvie das Bolas</button>
-  <button onclick="startGame(2)">Pong Arcade</button>
-  <button onclick="startGame(3)">Clique Frenético</button>
-  <button onclick="startGame(4)">Coletar Estrelas</button>
+  <button onclick="start(1)">Desvie das Bolas</button>
+  <button onclick="start(2)">Pong Arcade</button>
+  <button onclick="start(3)">Clique Frenético</button>
+  <button onclick="start(4)">Coletar Estrelas</button>
 </div>
 
 <div id="hud">
-  <p>Pontos: <span id="score">0</span></p>
+  Pontos: <span id="score">0</span><br>
   <button onclick="toggleSound()">🔊 Som</button>
-  <button onclick="backMenu()">⬅ Menu</button>
+  <button onclick="menu()">⬅ Menu</button>
 </div>
 
 <canvas id="game" width="360" height="500"></canvas>
@@ -56,74 +35,77 @@ canvas {
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const menu = document.getElementById("menu");
+const menuDiv = document.getElementById("menu");
+const hud = document.getElementById("hud");
 const scoreEl = document.getElementById("score");
 
-let game = 0, score = 0, active = false, sound = true;
-let player, objs, ball, clicks, timer;
+let game=0, score=0, active=false, sound=true;
+let player={}, items=[], ball={}, timer=0;
 
-menu.style.display = "block";
+/* ==== AUDIO ==== */
+let audioCtx=null;
+function initAudio(){
+  if(audioCtx) return;
+  audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+}
+function beep(f=500){
+  if(!sound||!audioCtx) return;
+  const o=audioCtx.createOscillator();
+  o.type="square";
+  o.frequency.value=f;
+  o.connect(audioCtx.destination);
+  o.start();
+  o.stop(audioCtx.currentTime+0.12);
+}
+function toggleSound(){sound=!sound}
 
-function beep(freq=400){
-  if(!sound) return;
-  const ctxA = new (window.AudioContext||window.webkitAudioContext)();
-  const osc = ctxA.createOscillator();
-  osc.frequency.value = freq;
-  osc.connect(ctxA.destination);
-  osc.start();
-  osc.stop(ctxA.currentTime + 0.1);
+/* ==== MENU ==== */
+menuDiv.style.display="block";
+
+function menu(){
+  active=false;
+  canvas.onclick=null;
+  menuDiv.style.display="block";
+  hud.style.display="none";
 }
 
-function toggleSound(){ sound = !sound; }
+/* ==== START ==== */
+function start(n){
+  initAudio();
+  game=n; score=0; active=true;
+  scoreEl.textContent=0;
+  menuDiv.style.display="none";
+  hud.style.display="block";
+  canvas.onclick=null;
+  items=[];
 
-function backMenu(){
-  active = false;
-  menu.style.display = "block";
-  canvas.style.display = "none";
-}
-
-function startGame(n){
-  game = n;
-  score = 0;
-  active = true;
-  scoreEl.textContent = 0;
-  menu.style.display = "none";
-  canvas.style.display = "block";
-
-  if(n===1) initAvoid();
-  if(n===2) initPong();
-  if(n===3) initClick();
-  if(n===4) initCollect();
+  if(n===1) player={x:160,y:440};
+  if(n===2){ player={y:200}; ball={x:180,y:250,vx:3,vy:3}; }
+  if(n===3){ timer=10; canvas.onclick=()=>{score++;beep(700)}; }
+  if(n===4) player={x:160,y:440};
 
   loop();
 }
 
-/* JOGO 1 – DESVIE DAS BOLAS */
-function initAvoid(){
-  player={x:160,y:440,w:40,h:40};
-  objs=[];
-}
-function avoid(){
-  if(Math.random()<0.03) objs.push({x:Math.random()*340,y:-20,r:12});
-  objs.forEach(o=>{
-    o.y+=4;
+/* ==== JOGO 1: DESVIE ==== */
+function gameAvoid(){
+  if(Math.random()<0.03) items.push({x:Math.random()*340,y:-20});
+  ctx.fillStyle="#22c55e";
+  ctx.fillRect(player.x,player.y,40,40);
+  ctx.fillStyle="red";
+  items.forEach(i=>{
+    i.y+=4;
     ctx.beginPath();
-    ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
-    ctx.fillStyle="red";ctx.fill();
-    if(o.x>player.x && o.x<player.x+40 && o.y>player.y){
+    ctx.arc(i.x,i.y,12,0,Math.PI*2);
+    ctx.fill();
+    if(i.y>player.y && i.x>player.x && i.x<player.x+40){
       active=false;beep(150);alert("Game Over!");
     }
   });
-  ctx.fillStyle="#22c55e";
-  ctx.fillRect(player.x,player.y,40,40);
 }
 
-/* JOGO 2 – PONG */
-function initPong(){
-  player={y:200};
-  ball={x:180,y:250,vx:3,vy:3};
-}
-function pong(){
+/* ==== JOGO 2: PONG ==== */
+function gamePong(){
   ctx.fillRect(20,player.y,10,80);
   ctx.beginPath();
   ctx.arc(ball.x,ball.y,8,0,Math.PI*2);
@@ -131,62 +113,51 @@ function pong(){
   ball.x+=ball.vx; ball.y+=ball.vy;
   if(ball.y<0||ball.y>500) ball.vy*=-1;
   if(ball.x<30 && ball.y>player.y && ball.y<player.y+80){
-    ball.vx*=-1;score++;beep(600);
+    ball.vx*=-1; score++; beep(600);
   }
 }
 
-/* JOGO 3 – CLIQUE */
-function initClick(){
-  clicks=0; timer=10;
-  canvas.onclick=()=>{
-    if(!active)return;
-    clicks++; score=clicks; scoreEl.textContent=score; beep(700);
-  };
-  setInterval(()=>{
-    if(active){timer--; if(timer<=0){active=false; alert("Pontos: "+score);}}
-  },1000);
-}
-function clickGame(){
+/* ==== JOGO 3: CLIQUE ==== */
+function gameClick(){
   ctx.fillStyle="#22c55e";
   ctx.fillRect(100,200,160,80);
   ctx.fillStyle="#000";
+  ctx.font="20px Arial";
   ctx.fillText("CLIQUE!",140,250);
 }
 
-/* JOGO 4 – COLETAR */
-function initCollect(){
-  player={x:160,y:440};
-  objs=[];
-}
-function collect(){
-  if(Math.random()<0.03) objs.push({x:Math.random()*340,y:-20});
-  objs.forEach(o=>{
-    o.y+=3;
-    ctx.fillStyle="yellow";
-    ctx.fillRect(o.x,o.y,15,15);
-    if(o.y>player.y){
-      score++; beep(800); o.y=600;
-    }
-  });
+/* ==== JOGO 4: COLETAR ==== */
+function gameCollect(){
+  if(Math.random()<0.03) items.push({x:Math.random()*340,y:-20});
   ctx.fillStyle="#22c55e";
   ctx.fillRect(player.x,player.y,40,40);
+  ctx.fillStyle="yellow";
+  items.forEach(i=>{
+    i.y+=3;
+    ctx.fillRect(i.x,i.y,15,15);
+    if(i.y>player.y){
+      score++; beep(800); i.y=600;
+    }
+  });
 }
 
+/* ==== LOOP ==== */
 function loop(){
   if(!active) return;
   ctx.clearRect(0,0,360,500);
-  scoreEl.textContent = score;
+  scoreEl.textContent=score;
 
-  if(game===1) avoid();
-  if(game===2) pong();
-  if(game===3) clickGame();
-  if(game===4) collect();
+  if(game===1) gameAvoid();
+  if(game===2) gamePong();
+  if(game===3) gameClick();
+  if(game===4) gameCollect();
 
   requestAnimationFrame(loop);
 }
 
+/* ==== CONTROLE ==== */
 document.addEventListener("mousemove",e=>{
-  player && (player.x = e.offsetX);
+  if(player.x!==undefined) player.x=e.offsetX;
 });
 </script>
 
