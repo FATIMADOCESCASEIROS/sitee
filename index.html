@@ -5,198 +5,257 @@
 <title>Jogos do Lucas</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body{
-  margin:0;
-  font-family:Arial,Helvetica,sans-serif;
-  background:#020617;
-  color:#e5e7eb;
-  text-align:center
-}
-h1{
-  color:#22c55e;
-  margin:15px 0;
-}
-button{
-  padding:12px 22px;
-  margin:6px;
-  border:none;
-  border-radius:10px;
-  background:#22c55e;
-  color:#020617;
-  font-size:16px;
-  cursor:pointer;
-}
-canvas{
-  background:#065f46;
-  margin:10px auto;
-  display:block;
-  border:4px solid #14532d;
-}
-#menu{display:block}
-#hud,#gameover{display:none}
+  body{
+    margin:0;
+    background:#020617;
+    color:#fff;
+    font-family:Arial, Helvetica, sans-serif;
+    text-align:center;
+  }
+  h1{margin:10px 0}
+  #menu button, #restart{
+    margin:6px;
+    padding:10px 16px;
+    font-size:16px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    background:#22c55e;
+    color:#020617;
+  }
+  canvas{
+    background:#020617;
+    border:2px solid #22c55e;
+    border-radius:12px;
+    display:block;
+    margin:10px auto;
+  }
+  #info{margin-top:6px}
 </style>
 </head>
-<body>
 
-<h1>🎱 Jogos do Lucas — Sinuca</h1>
+<body>
+<h1>🎮 Jogos do Lucas</h1>
 
 <div id="menu">
-  <p>Clique para jogar</p>
-  <button onclick="start()">Iniciar Sinuca</button>
-</div>
-
-<div id="hud">
-  Pontos: <span id="score">0</span><br>
-  <button onclick="restart()">🔁 Reiniciar</button>
-</div>
-
-<div id="gameover">
-  <h2>Fim de jogo</h2>
-  <p>Bolas encaçapadas: <span id="final"></span></p>
-  <button onclick="restart()">Jogar novamente</button>
+  <button onclick="startGame(1)">Desvie das Bolas</button>
+  <button onclick="startGame(2)">Pong Arcade</button>
+  <button onclick="startGame(3)">Clique Frenético</button>
+  <button onclick="startGame(4)">Coletar Estrelas</button>
+  <button onclick="startGame(5)">Sinuca Arcade</button>
 </div>
 
 <canvas id="game" width="360" height="500"></canvas>
 
+<div id="info">
+  <p id="score">Pontos: 0</p>
+  <button id="restart" onclick="restart()">Reiniciar</button>
+</div>
+
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+/* ================== BASE ================== */
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+let mouse={x:180,y:250};
+let currentGame=0, running=false, score=0;
+let obstacles=[], balls=[], timer=0;
+let player, pongBall, pongPaddle, clickTime;
+let poolCue, poolBalls, pockets;
 
-const menu = document.getElementById("menu");
-const hud = document.getElementById("hud");
-const gameover = document.getElementById("gameover");
-const scoreEl = document.getElementById("score");
-const finalEl = document.getElementById("final");
+canvas.addEventListener("mousemove",e=>{
+  const r=canvas.getBoundingClientRect();
+  mouse.x=e.clientX-r.left;
+  mouse.y=e.clientY-r.top;
+});
 
-let cueBall, balls, pockets;
-let score = 0;
-let active = false;
-let mouse = {x:0,y:0};
+function beep(freq=400,vol=0.01){
+  const a=new AudioContext();
+  const o=a.createOscillator();
+  const g=a.createGain();
+  o.frequency.value=freq;
+  g.gain.value=vol;
+  o.connect(g); g.connect(a.destination);
+  o.start();
+  o.stop(a.currentTime+0.1);
+}
 
-/* INICIAR */
-function start(){
-  menu.style.display="none";
-  hud.style.display="block";
-  gameover.style.display="none";
-
-  score = 0;
-  scoreEl.textContent = 0;
-
-  cueBall = {x:80,y:250,vx:0,vy:0};
-  balls = [
-    {x:260,y:220,c:"#ef4444",vx:0,vy:0},
-    {x:290,y:250,c:"#22c55e",vx:0,vy:0},
-    {x:260,y:280,c:"#3b82f6",vx:0,vy:0}
-  ];
-
-  pockets = [
-    {x:15,y:15},{x:180,y:10},{x:345,y:15},
-    {x:15,y:485},{x:180,y:490},{x:345,y:485}
-  ];
-
-  active = true;
-  loop();
+function startGame(id){
+  currentGame=id;
+  score=0;
+  timer=0;
+  running=true;
+  document.getElementById("score").innerText="Pontos: 0";
+  initGame(id);
 }
 
 function restart(){
-  start();
+  if(currentGame) startGame(currentGame);
 }
 
 function endGame(){
-  active = false;
-  hud.style.display="none";
-  gameover.style.display="block";
-  finalEl.textContent = score;
+  running=false;
 }
 
-/* DESENHO */
-function drawBall(b){
-  ctx.beginPath();
-  ctx.fillStyle = b.c || "#fff";
-  ctx.arc(b.x,b.y,10,0,Math.PI*2);
-  ctx.fill();
-}
-
-/* LOOP */
 function loop(){
-  if(!active) return;
-
   ctx.clearRect(0,0,360,500);
+  if(running){
+    updateGame(currentGame);
+    document.getElementById("score").innerText="Pontos: "+score;
+  }
+  requestAnimationFrame(loop);
+}
+loop();
 
-  // caçapas
+/* ================== INIT ================== */
+function initGame(id){
+  obstacles=[]; balls=[];
+  if(id===1){
+    player={x:160,y:440,w:40,h:40};
+  }
+  if(id===2){
+    pongPaddle={y:210,h:80};
+    pongBall={x:180,y:250,vx:4,vy:4,r:8};
+  }
+  if(id===3){
+    clickTime=300;
+  }
+  if(id===4){
+    player={x:160,y:440,w:40,h:40};
+  }
+  if(id===5){
+    poolCue={x:90,y:250,vx:0,vy:0};
+    poolBalls=[
+      {x:250,y:250,vx:0,vy:0,c:"#ef4444"},
+      {x:280,y:235,vx:0,vy:0,c:"#3b82f6"},
+      {x:280,y:265,vx:0,vy:0,c:"#22c55e"}
+    ];
+    pockets=[
+      {x:15,y:15},{x:180,y:10},{x:345,y:15},
+      {x:15,y:485},{x:180,y:490},{x:345,y:485}
+    ];
+  }
+}
+
+/* ================== UPDATE ================== */
+function updateGame(id){
+  if(id===1) gameAvoid();
+  if(id===2) gamePong();
+  if(id===3) gameClick();
+  if(id===4) gameCollect();
+  if(id===5) gamePool();
+}
+
+/* ========== JOGO 1 ========= */
+function gameAvoid(){
+  timer++;
+  if(timer%60===0) score++;
+  if(Math.random()<0.03)
+    obstacles.push({x:Math.random()*320+20,y:-20,r:12});
+  ctx.fillStyle="#22c55e";
+  ctx.fillRect(player.x,player.y,40,40);
+  ctx.fillStyle="#ef4444";
+  obstacles.forEach(o=>{
+    o.y+=4;
+    ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,7); ctx.fill();
+    let cx=Math.max(player.x,Math.min(o.x,player.x+40));
+    let cy=Math.max(player.y,Math.min(o.y,player.y+40));
+    if(Math.hypot(o.x-cx,o.y-cy)<o.r){beep(150);endGame();}
+  });
+  player.x=mouse.x-20;
+}
+
+/* ========== JOGO 2 ========= */
+function gamePong(){
+  ctx.fillStyle="#22c55e";
+  ctx.fillRect(20,pongPaddle.y,10,pongPaddle.h);
+  ctx.beginPath();
+  ctx.arc(pongBall.x,pongBall.y,pongBall.r,0,7);
+  ctx.fill();
+  pongBall.x+=pongBall.vx;
+  pongBall.y+=pongBall.vy;
+  if(pongBall.y<8||pongBall.y>492){pongBall.vy*=-1;beep(250);}
+  if(pongBall.x>352) pongBall.vx*=-1;
+  if(pongBall.x<30 &&
+     pongBall.y>pongPaddle.y &&
+     pongBall.y<pongPaddle.y+pongPaddle.h){
+       pongBall.vx*=-1;score++;beep(500);
+  }
+  if(pongBall.x<0) endGame();
+  pongPaddle.y=mouse.y-40;
+}
+
+/* ========== JOGO 3 ========= */
+function gameClick(){
+  clickTime--;
+  ctx.fillStyle="#22c55e";
+  ctx.fillRect(90,210,180,80);
+  ctx.fillStyle="#020617";
+  ctx.font="20px Arial";
+  ctx.fillText("CLIQUE!",140,255);
+  ctx.fillStyle="#fff";
+  ctx.fillText("Tempo: "+Math.floor(clickTime/60),130,180);
+  if(clickTime<=0) endGame();
+}
+
+/* ========== JOGO 4 ========= */
+function gameCollect(){
+  if(Math.random()<0.03)
+    balls.push({x:Math.random()*330,y:-20});
+  ctx.fillStyle="#22c55e";
+  ctx.fillRect(player.x,player.y,40,40);
+  ctx.fillStyle="#facc15";
+  balls.forEach(b=>{
+    b.y+=3;
+    ctx.fillRect(b.x,b.y,15,15);
+    if(b.y+15>player.y && b.x>player.x && b.x<player.x+40){
+      score++; beep(600,0.01); b.y=600;
+    }
+  });
+  player.x=mouse.x-20;
+}
+
+/* ========== JOGO 5 ========= */
+function gamePool(){
+  ctx.fillStyle="#065f46";
+  ctx.fillRect(0,0,360,500);
   ctx.fillStyle="#000";
   pockets.forEach(p=>{
-    ctx.beginPath();
-    ctx.arc(p.x,p.y,14,0,Math.PI*2);
-    ctx.fill();
+    ctx.beginPath();ctx.arc(p.x,p.y,14,0,7);ctx.fill();
   });
-
-  // linha de mira
-  if(Math.abs(cueBall.vx)+Math.abs(cueBall.vy)<0.05){
-    ctx.strokeStyle="#fff";
-    ctx.beginPath();
-    ctx.moveTo(cueBall.x,cueBall.y);
-    ctx.lineTo(mouse.x,mouse.y);
-    ctx.stroke();
+  function drawBall(b){
+    ctx.fillStyle=b.c||"#fff";
+    ctx.beginPath();ctx.arc(b.x,b.y,10,0,7);ctx.fill();
   }
-
-  // desenhar bolas
-  drawBall(cueBall);
-  balls.forEach(drawBall);
-
-  // física
-  [cueBall,...balls].forEach(b=>{
-    b.x += b.vx;
-    b.y += b.vy;
-    b.vx *= 0.98;
-    b.vy *= 0.98;
-
+  drawBall(poolCue);
+  poolBalls.forEach(drawBall);
+  [poolCue,...poolBalls].forEach(b=>{
+    b.x+=b.vx; b.y+=b.vy;
+    b.vx*=0.98; b.vy*=0.98;
     if(b.x<10||b.x>350) b.vx*=-1;
     if(b.y<10||b.y>490) b.vy*=-1;
   });
-
-  // colisão branca
-  balls.forEach(b=>{
-    let dx=b.x-cueBall.x;
-    let dy=b.y-cueBall.y;
-    if(Math.hypot(dx,dy)<20){
-      b.vx=dx*0.15;
-      b.vy=dy*0.15;
-      cueBall.vx*=-0.4;
-      cueBall.vy*=-0.4;
-    }
-  });
-
-  // caçapas
-  balls = balls.filter(b=>{
+  poolBalls=poolBalls.filter(b=>{
     for(let p of pockets){
       if(Math.hypot(b.x-p.x,b.y-p.y)<14){
-        score++;
-        scoreEl.textContent = score;
-        return false;
+        score++; beep(700,0.01); return false;
       }
     }
     return true;
   });
-
-  if(balls.length===0) endGame();
-
-  requestAnimationFrame(loop);
+  if(poolBalls.length===0) endGame();
 }
 
-/* CONTROLES */
-canvas.onmousemove=e=>{
-  mouse.x=e.offsetX;
-  mouse.y=e.offsetY;
-};
-
-canvas.onclick=()=>{
-  let dx=cueBall.x-mouse.x;
-  let dy=cueBall.y-mouse.y;
-  cueBall.vx=dx*0.12;
-  cueBall.vy=dy*0.12;
-};
+/* ================== CLIQUES ================== */
+canvas.addEventListener("click",()=>{
+  if(currentGame===3){score++;beep(650,0.01);}
+  if(currentGame===5){
+    let dx=poolCue.x-mouse.x;
+    let dy=poolCue.y-mouse.y;
+    poolCue.vx=dx*0.12;
+    poolCue.vy=dy*0.12;
+    beep(300,0.01);
+  }
+});
 </script>
-
 </body>
 </html>
