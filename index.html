@@ -2,260 +2,162 @@
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<title>Jogos do Lucas</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jogos do Lucas — Sinuca 8 Ball Mania</title>
 <style>
-  body{
-    margin:0;
-    background:#020617;
-    color:#fff;
-    font-family:Arial, Helvetica, sans-serif;
-    text-align:center;
-  }
-  h1{margin:10px 0}
-  #menu button, #restart{
-    margin:6px;
-    padding:10px 16px;
-    font-size:16px;
-    border:none;
-    border-radius:8px;
-    cursor:pointer;
-    background:#22c55e;
-    color:#020617;
-  }
-  canvas{
-    background:#020617;
-    border:2px solid #22c55e;
-    border-radius:12px;
-    display:block;
-    margin:10px auto;
-  }
-  #info{margin-top:6px}
+  body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; }
+  #gameCanvas { background: #2b2b2b; border: 4px solid #222; }
+  #status { color: #fff; font-family: Arial, sans-serif; margin-top: 10px; text-align: center; }
 </style>
 </head>
-
 <body>
-<h1>🎮 Jogos do Lucas</h1>
 
-<div id="menu">
-  <button onclick="startGame(1)">Desvie das Bolas</button>
-  <button onclick="startGame(2)">Pong Arcade</button>
-  <button onclick="startGame(3)">Clique Frenético</button>
-  <button onclick="startGame(4)">Coletar Estrelas</button>
-  <button onclick="startGame(5)">Sinuca Arcade</button>
-</div>
-
-<canvas id="game" width="360" height="500"></canvas>
-
-<div id="info">
-  <p id="score">Pontos: 0</p>
-  <button id="restart" onclick="restart()">Reiniciar</button>
-</div>
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+<div id="status">Sua vez! Clique e arraste para bater.</div>
 
 <script>
-/* ================== BASE ================== */
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
-let mouse={x:180,y:250};
-let currentGame=0, running=false, score=0;
-let obstacles=[], balls=[], timer=0;
-let player, pongBall, pongPaddle, clickTime;
-let poolCue, poolBalls, pockets;
+// ====== Constantes ======
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
 
-canvas.addEventListener("mousemove",e=>{
-  const r=canvas.getBoundingClientRect();
-  mouse.x=e.clientX-r.left;
-  mouse.y=e.clientY-r.top;
+const BALL_RADIUS = 10;
+const FRICTION = 0.99;
+const POCKET_RADIUS = 18;
+const COLORS = ["#fff","#f00","#00f","#ff0","#0f0","#f0f","#0ff","#aaa","#333"];
+
+// ====== Sons ======
+const hitSound = new Audio("https://cdn.pixabay.com/download/audio/2021/08/04/audio_88173eb644.mp3?filename=hit-124614.mp3");
+const pocketSound = new Audio("https://cdn.pixabay.com/download/audio/2022/03/19/audio_ea0f6531d1.mp3?filename=coin-drop-7401.mp3");
+
+// ====== Bolas ======
+let balls = [];
+let cueBall;
+let currentPlayer = "Jogador";
+
+// ====== Setup Inicial ======
+function initBalls() {
+  balls = [];
+  // Bola branca
+  cueBall = { x: 150, y: canvas.height/2, vx:0, vy:0, color: COLORS[0], pocketed: false };
+
+  // Bolas restantes em triângulo
+  let startX = 550, startY = canvas.height/2;
+  let count = 1;
+  for (let row=0; row<5; row++) {
+    for (let j=0; j<=row; j++) {
+      balls.push({ x: startX + row*22, y: startY + (j-row/2)*22, vx:0, vy:0, color: COLORS[count%COLORS.length], pocketed:false });
+      count++;
+    }
+  }
+}
+initBalls();
+
+// ====== Física ======
+function moveBalls() {
+  for (let b of [cueBall, ...balls]) {
+    if (b.pocketed) continue;
+    b.x += b.vx;
+    b.y += b.vy;
+    b.vx *= FRICTION;
+    b.vy *= FRICTION;
+
+    // Colisão com bordas
+    if (b.x < BALL_RADIUS || b.x > canvas.width - BALL_RADIUS) b.vx *= -1;
+    if (b.y < BALL_RADIUS || b.y > canvas.height - BALL_RADIUS) b.vy *= -1;
+
+    // Bolas nos buracos?
+    if (isPocketed(b)) {
+      b.pocketed = true;
+      pocketSound.play();
+    }
+  }
+}
+
+function isPocketed(b) {
+  let pockets = [
+    {x:0,y:0}, {x: canvas.width/2, y:0}, {x:canvas.width,y:0},
+    {x:0,y:canvas.height}, {x:canvas.width/2,y:canvas.height}, {x:canvas.width,y:canvas.height}
+  ];
+  for (let p of pockets) {
+    if (Math.hypot(b.x-p.x, b.y-p.y) < POCKET_RADIUS) return true;
+  }
+  return false;
+}
+
+// ====== Desenho ======
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Mesa
+  ctx.fillStyle = "#3a5";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Bolas
+  for (let b of [cueBall, ...balls]) {
+    if (!b.pocketed) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, BALL_RADIUS, 0, Math.PI*2);
+      ctx.fillStyle = b.color;
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.stroke();
+    }
+  }
+}
+
+// ====== Mira e Tacada ======
+let aiming = false, startX, startY;
+
+canvas.addEventListener("mousedown", function(e) {
+  if (currentPlayer==="Jogador" && isStopped()) {
+    aiming = true;
+    startX = e.offsetX;
+    startY = e.offsetY;
+  }
 });
 
-function beep(freq=400,vol=0.01){
-  const a=new AudioContext();
-  const o=a.createOscillator();
-  const g=a.createGain();
-  o.frequency.value=freq;
-  g.gain.value=vol;
-  o.connect(g); g.connect(a.destination);
-  o.start();
-  o.stop(a.currentTime+0.1);
-}
-
-function startGame(id){
-  currentGame=id;
-  score=0;
-  timer=0;
-  running=true;
-  document.getElementById("score").innerText="Pontos: 0";
-  initGame(id);
-}
-
-function restart(){
-  if(currentGame) startGame(currentGame);
-}
-
-function endGame(){
-  running=false;
-}
-
-function loop(){
-  ctx.clearRect(0,0,360,500);
-  if(running){
-    updateGame(currentGame);
-    document.getElementById("score").innerText="Pontos: "+score;
+canvas.addEventListener("mouseup", function(e) {
+  if (aiming) {
+    aiming = false;
+    let dx = startX - e.offsetX;
+    let dy = startY - e.offsetY;
+    cueBall.vx = dx/5;
+    cueBall.vy = dy/5;
+    hitSound.play();
+    currentPlayer = "CPU";
+    document.getElementById("status").innerText = "CPU jogando...";
+    setTimeout(cpuPlay, 1500);
   }
+});
+
+// ====== Verifica se todas as bolas pararam ======
+function isStopped() {
+  return Math.hypot(cueBall.vx, cueBall.vy) < 0.1 && balls.every(b=> Math.hypot(b.vx,b.vy) < 0.1);
+}
+
+// ====== IA Simples ======
+function cpuPlay() {
+  if (!isStopped()) { setTimeout(cpuPlay, 1000); return; }
+
+  // Mira aleatória
+  let angle = Math.random()*Math.PI*2;
+  let force = 5 + Math.random()*5;
+  cueBall.vx = Math.cos(angle)*force;
+  cueBall.vy = Math.sin(angle)*force;
+  hitSound.play();
+
+  currentPlayer = "Jogador";
+  document.getElementById("status").innerText = "Sua vez! Clique e arraste.";
+}
+
+// ====== Loop Principal ======
+function loop() {
+  moveBalls();
+  draw();
   requestAnimationFrame(loop);
 }
+
 loop();
-
-/* ================== INIT ================== */
-function initGame(id){
-  obstacles=[]; balls=[];
-  if(id===1){
-    player={x:160,y:440,w:40,h:40};
-  }
-  if(id===2){
-    pongPaddle={y:210,h:80};
-    pongBall={x:180,y:250,vx:4,vy:4,r:8};
-  }
-  if(id===3){
-    clickTime=300;
-  }
-  if(id===4){
-    player={x:160,y:440,w:40,h:40};
-  }
-  if(id===5){
-    poolCue={x:90,y:250,vx:0,vy:0};
-    poolBalls=[
-      {x:250,y:250,vx:0,vy:0,c:"#ef4444"},
-      {x:280,y:235,vx:0,vy:0,c:"#3b82f6"},
-      {x:280,y:265,vx:0,vy:0,c:"#22c55e"}
-    ];
-    pockets=[
-      {x:15,y:15},{x:180,y:10},{x:345,y:15},
-      {x:15,y:485},{x:180,y:490},{x:345,y:485}
-    ];
-  }
-}
-
-/* ================== UPDATE ================== */
-function updateGame(id){
-  if(id===1) gameAvoid();
-  if(id===2) gamePong();
-  if(id===3) gameClick();
-  if(id===4) gameCollect();
-  if(id===5) gamePool();
-}
-
-/* ========== JOGO 1 ========= */
-function gameAvoid(){
-  timer++;
-  if(timer%60===0) score++;
-  if(Math.random()<0.03)
-    obstacles.push({x:Math.random()*320+20,y:-20,r:12});
-  ctx.fillStyle="#22c55e";
-  ctx.fillRect(player.x,player.y,40,40);
-  ctx.fillStyle="#ef4444";
-  obstacles.forEach(o=>{
-    o.y+=4;
-    ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,7); ctx.fill();
-    let cx=Math.max(player.x,Math.min(o.x,player.x+40));
-    let cy=Math.max(player.y,Math.min(o.y,player.y+40));
-    if(Math.hypot(o.x-cx,o.y-cy)<o.r){beep(150);endGame();}
-  });
-  player.x=mouse.x-20;
-}
-
-/* ========== JOGO 2 ========= */
-function gamePong(){
-  ctx.fillStyle="#22c55e";
-  ctx.fillRect(20,pongPaddle.y,10,pongPaddle.h);
-  ctx.beginPath();
-  ctx.arc(pongBall.x,pongBall.y,pongBall.r,0,7);
-  ctx.fill();
-  pongBall.x+=pongBall.vx;
-  pongBall.y+=pongBall.vy;
-  if(pongBall.y<8||pongBall.y>492){pongBall.vy*=-1;beep(250);}
-  if(pongBall.x>352) pongBall.vx*=-1;
-  if(pongBall.x<30 &&
-     pongBall.y>pongPaddle.y &&
-     pongBall.y<pongPaddle.y+pongPaddle.h){
-       pongBall.vx*=-1;score++;beep(500);
-  }
-  if(pongBall.x<0) endGame();
-  pongPaddle.y=mouse.y-40;
-}
-
-/* ========== JOGO 3 ========= */
-function gameClick(){
-  clickTime--;
-  ctx.fillStyle="#22c55e";
-  ctx.fillRect(90,210,180,80);
-  ctx.fillStyle="#020617";
-  ctx.font="20px Arial";
-  ctx.fillText("CLIQUE!",140,255);
-  ctx.fillStyle="#fff";
-  ctx.fillText("Tempo: "+Math.floor(clickTime/60),130,180);
-  if(clickTime<=0) endGame();
-}
-
-/* ========== JOGO 4 ========= */
-function gameCollect(){
-  if(Math.random()<0.03)
-    balls.push({x:Math.random()*330,y:-20});
-  ctx.fillStyle="#22c55e";
-  ctx.fillRect(player.x,player.y,40,40);
-  ctx.fillStyle="#facc15";
-  balls.forEach(b=>{
-    b.y+=3;
-    ctx.fillRect(b.x,b.y,15,15);
-    if(b.y+15>player.y && b.x>player.x && b.x<player.x+40){
-      score++; beep(600,0.01); b.y=600;
-    }
-  });
-  player.x=mouse.x-20;
-}
-
-/* ========== JOGO 5 ========= */
-function gamePool(){
-  ctx.fillStyle="#065f46";
-  ctx.fillRect(0,0,360,500);
-  ctx.fillStyle="#000";
-  pockets.forEach(p=>{
-    ctx.beginPath();ctx.arc(p.x,p.y,14,0,7);ctx.fill();
-  });
-  function drawBall(b){
-    ctx.fillStyle=b.c||"#fff";
-    ctx.beginPath();ctx.arc(b.x,b.y,10,0,7);ctx.fill();
-  }
-  drawBall(poolCue);
-  poolBalls.forEach(drawBall);
-  [poolCue,...poolBalls].forEach(b=>{
-    b.x+=b.vx; b.y+=b.vy;
-    b.vx*=0.98; b.vy*=0.98;
-    if(b.x<10||b.x>350) b.vx*=-1;
-    if(b.y<10||b.y>490) b.vy*=-1;
-  });
-  poolBalls=poolBalls.filter(b=>{
-    for(let p of pockets){
-      if(Math.hypot(b.x-p.x,b.y-p.y)<14){
-        score++; beep(700,0.01); return false;
-      }
-    }
-    return true;
-  });
-  if(poolBalls.length===0) endGame();
-}
-
-/* ================== CLIQUES ================== */
-canvas.addEventListener("click",()=>{
-  if(currentGame===3){score++;beep(650,0.01);}
-  if(currentGame===5){
-    let dx=poolCue.x-mouse.x;
-    let dy=poolCue.y-mouse.y;
-    poolCue.vx=dx*0.12;
-    poolCue.vy=dy*0.12;
-    beep(300,0.01);
-  }
-});
 </script>
+
 </body>
 </html>
