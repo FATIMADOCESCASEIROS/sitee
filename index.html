@@ -2,19 +2,42 @@
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<title>Arcade Games</title>
+<title>Neon Arcade</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body{margin:0;font-family:Arial;background:#0f172a;color:#fff;text-align:center}
-h1{color:#22c55e}
-button{padding:12px 20px;margin:6px;border:none;border-radius:8px;background:#22c55e;cursor:pointer}
-canvas{background:#020617;margin:10px auto;display:block;border:2px solid #22c55e}
-#menu,#hud{display:none}
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:radial-gradient(circle at top,#020617,#000);
+  color:#e5e7eb;
+  text-align:center
+}
+h1{color:#22c55e;text-shadow:0 0 10px #22c55e}
+button{
+  padding:12px 22px;
+  margin:6px;
+  border:none;
+  border-radius:10px;
+  background:#22c55e;
+  color:#020617;
+  font-size:16px;
+  cursor:pointer;
+  box-shadow:0 0 15px #22c55e;
+}
+button:hover{transform:scale(1.05)}
+canvas{
+  background:#020617;
+  margin:15px auto;
+  display:block;
+  border:2px solid #22c55e;
+  box-shadow:0 0 25px #22c55e;
+}
+#menu,#hud,#gameover{display:none}
 </style>
 </head>
 <body>
 
-<h1>🎮 Arcade Games</h1>
+<h1>🎮 Neon Arcade</h1>
 
 <div id="menu">
   <p>Escolha um jogo</p>
@@ -30,6 +53,12 @@ canvas{background:#020617;margin:10px auto;display:block;border:2px solid #22c55
   <button onclick="menu()">⬅ Menu</button>
 </div>
 
+<div id="gameover">
+  <h2>💀 Game Over</h2>
+  <button onclick="restart()">🔁 Reiniciar</button>
+  <button onclick="menu()">⬅ Menu</button>
+</div>
+
 <canvas id="game" width="360" height="500"></canvas>
 
 <script>
@@ -37,106 +66,133 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const menuDiv = document.getElementById("menu");
 const hud = document.getElementById("hud");
+const gameoverDiv = document.getElementById("gameover");
 const scoreEl = document.getElementById("score");
 
 let game=0, score=0, active=false, sound=true;
-let player={}, items=[], ball={}, timer=0;
+let player={}, items=[], ball={}, lastGame=0;
 
-/* ==== AUDIO ==== */
+/* ==== AUDIO (BAIXO) ==== */
 let audioCtx=null;
 function initAudio(){
   if(audioCtx) return;
-  audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
 }
-function beep(f=500){
+function beep(freq=500){
   if(!sound||!audioCtx) return;
   const o=audioCtx.createOscillator();
-  o.type="square";
-  o.frequency.value=f;
-  o.connect(audioCtx.destination);
+  const g=audioCtx.createGain();
+  g.gain.value=0.05; // volume baixo
+  o.frequency.value=freq;
+  o.connect(g); g.connect(audioCtx.destination);
   o.start();
-  o.stop(audioCtx.currentTime+0.12);
+  o.stop(audioCtx.currentTime+0.1);
 }
 function toggleSound(){sound=!sound}
 
 /* ==== MENU ==== */
-menuDiv.style.display="block";
+menu();
 
 function menu(){
   active=false;
-  canvas.onclick=null;
   menuDiv.style.display="block";
   hud.style.display="none";
+  gameoverDiv.style.display="none";
 }
 
 /* ==== START ==== */
 function start(n){
   initAudio();
+  lastGame=n;
   game=n; score=0; active=true;
   scoreEl.textContent=0;
   menuDiv.style.display="none";
   hud.style.display="block";
-  canvas.onclick=null;
+  gameoverDiv.style.display="none";
   items=[];
 
-  if(n===1) player={x:160,y:440};
-  if(n===2){ player={y:200}; ball={x:180,y:250,vx:3,vy:3}; }
-  if(n===3){ timer=10; canvas.onclick=()=>{score++;beep(700)}; }
-  if(n===4) player={x:160,y:440};
-
+  if(n===1||n===4) player={x:160,y:440,w:40,h:40};
+  if(n===2){
+    player={y:210,h:80};
+    ball={x:180,y:250,vx:4,vy:4,r:8};
+  }
   loop();
 }
 
-/* ==== JOGO 1: DESVIE ==== */
+function restart(){ start(lastGame); }
+
+function endGame(){
+  active=false;
+  hud.style.display="none";
+  gameoverDiv.style.display="block";
+  beep(180);
+}
+
+/* ==== JOGO 1 ==== */
 function gameAvoid(){
-  if(Math.random()<0.03) items.push({x:Math.random()*340,y:-20});
+  if(Math.random()<0.03) items.push({x:Math.random()*330,y:-20});
   ctx.fillStyle="#22c55e";
   ctx.fillRect(player.x,player.y,40,40);
-  ctx.fillStyle="red";
+  ctx.fillStyle="#ef4444";
   items.forEach(i=>{
     i.y+=4;
     ctx.beginPath();
     ctx.arc(i.x,i.y,12,0,Math.PI*2);
     ctx.fill();
     if(i.y>player.y && i.x>player.x && i.x<player.x+40){
-      active=false;beep(150);alert("Game Over!");
+      endGame();
     }
   });
 }
 
-/* ==== JOGO 2: PONG ==== */
+/* ==== JOGO 2 (PONG CORRIGIDO) ==== */
 function gamePong(){
-  ctx.fillRect(20,player.y,10,80);
+  // paddle
+  ctx.fillStyle="#22c55e";
+  ctx.fillRect(20,player.y,10,player.h);
+
+  // bola
   ctx.beginPath();
-  ctx.arc(ball.x,ball.y,8,0,Math.PI*2);
+  ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);
   ctx.fill();
-  ball.x+=ball.vx; ball.y+=ball.vy;
-  if(ball.y<0||ball.y>500) ball.vy*=-1;
-  if(ball.x<30 && ball.y>player.y && ball.y<player.y+80){
-    ball.vx*=-1; score++; beep(600);
+
+  ball.x+=ball.vx;
+  ball.y+=ball.vy;
+
+  if(ball.y<ball.r||ball.y>500-ball.r) ball.vy*=-1;
+
+  if(
+    ball.x-ball.r<30 &&
+    ball.y>player.y &&
+    ball.y<player.y+player.h
+  ){
+    ball.vx*=-1;
+    score++; beep(500);
   }
+
+  if(ball.x<0) endGame();
 }
 
-/* ==== JOGO 3: CLIQUE ==== */
+/* ==== JOGO 3 ==== */
 function gameClick(){
   ctx.fillStyle="#22c55e";
-  ctx.fillRect(100,200,160,80);
-  ctx.fillStyle="#000";
-  ctx.font="20px Arial";
-  ctx.fillText("CLIQUE!",140,250);
+  ctx.fillRect(90,210,180,80);
+  ctx.fillStyle="#020617";
+  ctx.font="22px Arial";
+  ctx.fillText("CLIQUE!",135,260);
 }
 
-/* ==== JOGO 4: COLETAR ==== */
+/* ==== JOGO 4 ==== */
 function gameCollect(){
-  if(Math.random()<0.03) items.push({x:Math.random()*340,y:-20});
+  if(Math.random()<0.03) items.push({x:Math.random()*330,y:-20});
   ctx.fillStyle="#22c55e";
   ctx.fillRect(player.x,player.y,40,40);
-  ctx.fillStyle="yellow";
+  ctx.fillStyle="#facc15";
   items.forEach(i=>{
     i.y+=3;
     ctx.fillRect(i.x,i.y,15,15);
     if(i.y>player.y){
-      score++; beep(800); i.y=600;
+      score++; beep(700); i.y=600;
     }
   });
 }
@@ -155,10 +211,14 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
-/* ==== CONTROLE ==== */
+/* ==== CONTROLES ==== */
 document.addEventListener("mousemove",e=>{
   if(player.x!==undefined) player.x=e.offsetX;
+  if(player.y!==undefined && game===2) player.y=e.offsetY-40;
 });
+canvas.onclick=()=>{
+  if(game===3){ score++; beep(650); }
+};
 </script>
 
 </body>
