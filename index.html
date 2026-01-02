@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<title>Neon Arcade</title>
+<title>Jogos do Lucas</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body{
@@ -12,12 +12,16 @@ body{
   color:#e5e7eb;
   text-align:center
 }
-h1{color:#22c55e;text-shadow:0 0 10px #22c55e}
+h1{
+  color:#22c55e;
+  text-shadow:0 0 15px #22c55e;
+  margin-top:10px
+}
 button{
   padding:12px 22px;
   margin:6px;
   border:none;
-  border-radius:10px;
+  border-radius:12px;
   background:#22c55e;
   color:#020617;
   font-size:16px;
@@ -37,7 +41,7 @@ canvas{
 </head>
 <body>
 
-<h1>🎮 Neon Arcade</h1>
+<h1>🎮 Jogos do Lucas</h1>
 
 <div id="menu">
   <p>Escolha um jogo</p>
@@ -48,13 +52,15 @@ canvas{
 </div>
 
 <div id="hud">
-  Pontos: <span id="score">0</span><br>
+  Pontos: <span id="score">0</span>
+  <br>
   <button onclick="toggleSound()">🔊 Som</button>
   <button onclick="menu()">⬅ Menu</button>
 </div>
 
 <div id="gameover">
   <h2>💀 Game Over</h2>
+  <p>Pontuação: <span id="final"></span></p>
   <button onclick="restart()">🔁 Reiniciar</button>
   <button onclick="menu()">⬅ Menu</button>
 </div>
@@ -64,15 +70,17 @@ canvas{
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+
 const menuDiv = document.getElementById("menu");
 const hud = document.getElementById("hud");
 const gameoverDiv = document.getElementById("gameover");
 const scoreEl = document.getElementById("score");
+const finalEl = document.getElementById("final");
 
 let game=0, score=0, active=false, sound=true;
-let player={}, items=[], ball={}, lastGame=0;
+let player={}, items=[], ball={}, lastGame=0, speed=1;
 
-/* ==== AUDIO (BAIXO) ==== */
+/* ==== AUDIO ==== */
 let audioCtx=null;
 function initAudio(){
   if(audioCtx) return;
@@ -82,7 +90,7 @@ function beep(freq=500){
   if(!sound||!audioCtx) return;
   const o=audioCtx.createOscillator();
   const g=audioCtx.createGain();
-  g.gain.value=0.05; // volume baixo
+  g.gain.value=0.04;
   o.frequency.value=freq;
   o.connect(g); g.connect(audioCtx.destination);
   o.start();
@@ -92,7 +100,6 @@ function toggleSound(){sound=!sound}
 
 /* ==== MENU ==== */
 menu();
-
 function menu(){
   active=false;
   menuDiv.style.display="block";
@@ -104,14 +111,17 @@ function menu(){
 function start(n){
   initAudio();
   lastGame=n;
-  game=n; score=0; active=true;
+  game=n; score=0; speed=1;
   scoreEl.textContent=0;
   menuDiv.style.display="none";
   hud.style.display="block";
   gameoverDiv.style.display="none";
+  active=true;
   items=[];
 
-  if(n===1||n===4) player={x:160,y:440,w:40,h:40};
+  if(n===1||n===4){
+    player={x:160,y:440,w:40,h:40};
+  }
   if(n===2){
     player={y:210,h:80};
     ball={x:180,y:250,vx:4,vy:4,r:8};
@@ -123,35 +133,63 @@ function restart(){ start(lastGame); }
 
 function endGame(){
   active=false;
+  finalEl.textContent=score;
   hud.style.display="none";
   gameoverDiv.style.display="block";
   beep(180);
 }
 
-/* ==== JOGO 1 ==== */
+/* ==== COLISÃO REAL (CÍRCULO x RETÂNGULO) ==== */
+function circleRectCollision(cx,cy,cr,rx,ry,rw,rh){
+  const testX = Math.max(rx, Math.min(cx, rx+rw));
+  const testY = Math.max(ry, Math.min(cy, ry+rh));
+  const distX = cx - testX;
+  const distY = cy - testY;
+  return (distX*distX + distY*distY) <= cr*cr;
+}
+
+/* ==== JOGO 1: DESVIE DAS BOLAS (FIXADO) ==== */
 function gameAvoid(){
-  if(Math.random()<0.03) items.push({x:Math.random()*330,y:-20});
+  speed+=0.001;
+
+  if(Math.random()<0.03){
+    items.push({
+      x:Math.random()*320+20,
+      y:-20,
+      r:12
+    });
+  }
+
+  // player
   ctx.fillStyle="#22c55e";
-  ctx.fillRect(player.x,player.y,40,40);
+  ctx.fillRect(player.x,player.y,player.w,player.h);
+
+  // bolas
   ctx.fillStyle="#ef4444";
-  items.forEach(i=>{
-    i.y+=4;
+  items.forEach(b=>{
+    b.y += 4*speed;
     ctx.beginPath();
-    ctx.arc(i.x,i.y,12,0,Math.PI*2);
+    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
     ctx.fill();
-    if(i.y>player.y && i.x>player.x && i.x<player.x+40){
+
+    if(
+      circleRectCollision(
+        b.x,b.y,b.r,
+        player.x,player.y,player.w,player.h
+      )
+    ){
       endGame();
     }
   });
 }
 
-/* ==== JOGO 2 (PONG CORRIGIDO) ==== */
+/* ==== JOGO 2: PONG ==== */
 function gamePong(){
-  // paddle
   ctx.fillStyle="#22c55e";
   ctx.fillRect(20,player.y,10,player.h);
 
-  // bola
+  ctx.fillRect(350,0,5,500);
+
   ctx.beginPath();
   ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);
   ctx.fill();
@@ -159,7 +197,14 @@ function gamePong(){
   ball.x+=ball.vx;
   ball.y+=ball.vy;
 
-  if(ball.y<ball.r||ball.y>500-ball.r) ball.vy*=-1;
+  if(ball.y<ball.r||ball.y>500-ball.r){
+    ball.vy*=-1;
+    beep(300);
+  }
+
+  if(ball.x>350-ball.r){
+    ball.vx*=-1;
+  }
 
   if(
     ball.x-ball.r<30 &&
@@ -167,7 +212,8 @@ function gamePong(){
     ball.y<player.y+player.h
   ){
     ball.vx*=-1;
-    score++; beep(500);
+    score++;
+    beep(600);
   }
 
   if(ball.x<0) endGame();
@@ -184,15 +230,21 @@ function gameClick(){
 
 /* ==== JOGO 4 ==== */
 function gameCollect(){
-  if(Math.random()<0.03) items.push({x:Math.random()*330,y:-20});
+  if(Math.random()<0.03){
+    items.push({x:Math.random()*330,y:-20});
+  }
+
   ctx.fillStyle="#22c55e";
   ctx.fillRect(player.x,player.y,40,40);
   ctx.fillStyle="#facc15";
+
   items.forEach(i=>{
     i.y+=3;
     ctx.fillRect(i.x,i.y,15,15);
     if(i.y>player.y){
-      score++; beep(700); i.y=600;
+      score++;
+      beep(700);
+      i.y=600;
     }
   });
 }
@@ -214,7 +266,7 @@ function loop(){
 /* ==== CONTROLES ==== */
 document.addEventListener("mousemove",e=>{
   if(player.x!==undefined) player.x=e.offsetX;
-  if(player.y!==undefined && game===2) player.y=e.offsetY-40;
+  if(game===2) player.y=e.offsetY-40;
 });
 canvas.onclick=()=>{
   if(game===3){ score++; beep(650); }
